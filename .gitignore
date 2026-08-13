@@ -1,0 +1,28 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Archivos temporales
+*.log
+
+# Variables de entorno
+.env
+
+# Archivos generados
+*.tmp
+
+# Modelos entrenados
+models/*.pkl
+
+# Datos procesados
+data/processed/
+
+# Streamlit
+.streamlit/secrets.toml
