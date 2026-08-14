@@ -6,11 +6,16 @@ import joblib
 
 from pathlib import Path
 
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix
+)
 
-# ==========================================================
 # CONFIGURACIÓN GENERAL
-# ==========================================================
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 DATA_FILE = (
@@ -26,14 +31,10 @@ MODEL_FILE = (
     / "churn_model.pkl"
 )
 
-# Umbral utilizado para activar una alerta de Churn
+# Umbral utilizado por el sistema
 CHURN_THRESHOLD = 0.30
 
-
-# ==========================================================
-# CONFIGURACIÓN DE STREAMLIT
-# ==========================================================
-
+# CONFIGURACIÓN STREAMLIT
 st.set_page_config(
     page_title="Customer Churn Prediction",
     page_icon="📊",
@@ -41,27 +42,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
-# ==========================================================
-# ESTILOS PERSONALIZADOS
-# ==========================================================
-
+# ESTILOS
 st.markdown(
     """
     <style>
 
-    /* ======================================================
-       FONDO GENERAL
-       ====================================================== */
-
     .stApp {
         background-color: #f5f7fb;
     }
-
-
-    /* ======================================================
-       TÍTULOS
-       ====================================================== */
 
     h1 {
         font-weight: 800;
@@ -75,7 +63,6 @@ st.markdown(
         font-weight: 650;
     }
 
-
     /* ======================================================
        SIDEBAR
        ====================================================== */
@@ -85,26 +72,15 @@ st.markdown(
         border-right: 1px solid #1f2937;
     }
 
-
-    /* ------------------------------------------------------
-       TÍTULOS DEL SIDEBAR
-       ------------------------------------------------------ */
-
     section[data-testid="stSidebar"] h1,
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 {
         color: #ffffff !important;
     }
 
-
-    /* ------------------------------------------------------
-       TEXTO GENERAL DEL SIDEBAR
-       ------------------------------------------------------ */
-
     section[data-testid="stSidebar"] p {
         color: #f1f5f9 !important;
     }
-
 
     /* ======================================================
        NAVEGACIÓN
@@ -115,9 +91,6 @@ st.markdown(
         gap: 5px;
         width: 100%;
     }
-
-
-    /* Cada opción */
 
     section[data-testid="stSidebar"]
     div[role="radiogroup"]
@@ -131,17 +104,11 @@ st.markdown(
         width: 100%;
     }
 
-
-    /* Hover */
-
     section[data-testid="stSidebar"]
     div[role="radiogroup"]
     label:hover {
         background-color: #1f2937 !important;
     }
-
-
-    /* Texto */
 
     section[data-testid="stSidebar"]
     div[role="radiogroup"]
@@ -151,18 +118,12 @@ st.markdown(
         font-weight: 600 !important;
     }
 
-
-    /* Opción seleccionada */
-
     section[data-testid="stSidebar"]
     div[role="radiogroup"]
     label:has(input:checked) {
         background-color: #4f46e5 !important;
         box-shadow: 0 3px 10px rgba(79, 70, 229, 0.30);
     }
-
-
-    /* Texto seleccionado */
 
     section[data-testid="stSidebar"]
     div[role="radiogroup"]
@@ -171,28 +132,8 @@ st.markdown(
         font-weight: 800 !important;
     }
 
-
     /* ======================================================
        TARJETAS
-       ====================================================== */
-
-    .info-card {
-        background: white;
-        padding: 22px;
-        border-radius: 14px;
-        border: 1px solid #e5e7eb;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-
-
-    .info-card h3 {
-        margin-top: 0;
-    }
-
-
-    /* ======================================================
-       DESCRIPCIONES
        ====================================================== */
 
     .description-card {
@@ -205,11 +146,6 @@ st.markdown(
         line-height: 1.5;
     }
 
-
-    /* ======================================================
-       TARJETA ÉXITO
-       ====================================================== */
-
     .success-card {
         background: #ecfdf5;
         border-left: 5px solid #10b981;
@@ -217,12 +153,8 @@ st.markdown(
         border-radius: 10px;
         margin: 15px 0;
         color: #065f46;
+        line-height: 1.5;
     }
-
-
-    /* ======================================================
-       TARJETA ADVERTENCIA
-       ====================================================== */
 
     .warning-card {
         background: #fffbeb;
@@ -231,12 +163,8 @@ st.markdown(
         border-radius: 10px;
         margin: 15px 0;
         color: #92400e;
+        line-height: 1.5;
     }
-
-
-    /* ======================================================
-       TARJETA PELIGRO
-       ====================================================== */
 
     .danger-card {
         background: #fef2f2;
@@ -245,12 +173,8 @@ st.markdown(
         border-radius: 10px;
         margin: 15px 0;
         color: #991b1b;
+        line-height: 1.5;
     }
-
-
-    /* ======================================================
-       TARJETA MODELO
-       ====================================================== */
 
     .model-card {
         background: white;
@@ -260,27 +184,6 @@ st.markdown(
         height: 100%;
         line-height: 1.5;
     }
-
-
-    /* ======================================================
-       MÉTRICAS
-       ====================================================== */
-
-    .metric-title {
-        font-size: 14px;
-        color: #6b7280;
-    }
-
-    .metric-value {
-        font-size: 30px;
-        font-weight: 800;
-        color: #111827;
-    }
-
-
-    /* ======================================================
-       SEPARADOR
-       ====================================================== */
 
     hr {
         margin-top: 25px;
@@ -292,31 +195,19 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
-# ==========================================================
 # CARGAR DATASET
-# ==========================================================
-
 @st.cache_data
 def load_data():
 
     return pd.read_csv(DATA_FILE)
 
-
-# ==========================================================
 # CARGAR MODELO
-# ==========================================================
-
 @st.cache_resource
 def load_model():
 
     return joblib.load(MODEL_FILE)
 
-
-# ==========================================================
 # CARGAR RECURSOS
-# ==========================================================
-
 try:
 
     df = load_data()
@@ -332,11 +223,7 @@ except Exception as e:
 
     st.stop()
 
-
-# ==========================================================
 # IDENTIFICAR MODELO
-# ==========================================================
-
 def get_model_name(model):
 
     try:
@@ -371,14 +258,9 @@ def get_model_name(model):
 
     return "Modelo supervisado"
 
-
 model_name = get_model_name(model)
 
-
-# ==========================================================
 # FUNCIONES AUXILIARES
-# ==========================================================
-
 def show_description(title, text):
 
     st.markdown(
@@ -390,7 +272,6 @@ def show_description(title, text):
         """,
         unsafe_allow_html=True
     )
-
 
 def risk_information(probability):
 
@@ -432,11 +313,80 @@ def risk_information(probability):
             "para activar una estrategia de retención."
         )
 
+# PREPARAR VARIABLES PARA EVALUACIÓN
+X = df.drop(
+    columns=["Churn", "customerID"]
+)
 
-# ==========================================================
+y = df["Churn"]
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X,
+    y,
+    test_size=0.20,
+    random_state=42,
+    stratify=y
+)
+
+# MÉTRICAS DEL MODELO REAL
+try:
+
+    probabilities = model.predict_proba(
+        X_test
+    )[:, 1]
+
+    y_pred = [
+        "Yes"
+        if probability >= CHURN_THRESHOLD
+        else "No"
+        for probability in probabilities
+    ]
+
+    final_accuracy = accuracy_score(
+        y_test,
+        y_pred
+    )
+
+    final_precision = precision_score(
+        y_test,
+        y_pred,
+        pos_label="Yes",
+        zero_division=0
+    )
+
+    final_recall = recall_score(
+        y_test,
+        y_pred,
+        pos_label="Yes",
+        zero_division=0
+    )
+
+    final_f1 = f1_score(
+        y_test,
+        y_pred,
+        pos_label="Yes",
+        zero_division=0
+    )
+
+    final_confusion = confusion_matrix(
+        y_test,
+        y_pred,
+        labels=["No", "Yes"]
+    )
+
+except Exception:
+
+    final_accuracy = 0
+    final_precision = 0
+    final_recall = 0
+    final_f1 = 0
+
+    final_confusion = [
+        [0, 0],
+        [0, 0]
+    ]
+
 # ENCABEZADO
-# ==========================================================
-
 st.title(
     "📊 Customer Churn Prediction"
 )
@@ -456,11 +406,7 @@ st.caption(
     "Proyecto de análisis de datos y Machine Learning"
 )
 
-
-# ==========================================================
-# SIDEBAR / NAVEGACIÓN
-# ==========================================================
-
+# SIDEBAR
 st.sidebar.title(
     "📊 Churn Analytics"
 )
@@ -476,10 +422,6 @@ st.sidebar.subheader(
 )
 
 
-# ==========================================================
-# MENÚ
-# ==========================================================
-
 page = st.sidebar.radio(
     "Selecciona una sección:",
     [
@@ -493,11 +435,7 @@ page = st.sidebar.radio(
     label_visibility="collapsed"
 )
 
-
-# ==========================================================
 # CÁLCULOS GENERALES
-# ==========================================================
-
 total_customers = len(df)
 
 churn_customers = (
@@ -509,15 +447,11 @@ no_churn_customers = (
 ).sum()
 
 churn_rate = (
-    churn_customers / total_customers
+    churn_customers
+    / total_customers
 ) * 100
 
-
-# ==========================================================
-# PÁGINA 1
-# RESUMEN EJECUTIVO
-# ==========================================================
-
+# PÁGINA 1 — RESUMEN
 if page == "🏠 Resumen ejecutivo":
 
     st.header(
@@ -532,18 +466,11 @@ if page == "🏠 Resumen ejecutivo":
         """
     )
 
-
-    # ------------------------------------------------------
-    # KPIs
-    # ------------------------------------------------------
-
     st.subheader(
         "📌 Indicadores principales"
     )
 
-
     col1, col2, col3, col4 = st.columns(4)
-
 
     with col1:
 
@@ -552,14 +479,12 @@ if page == "🏠 Resumen ejecutivo":
             f"{total_customers:,}"
         )
 
-
     with col2:
 
         st.metric(
             "⚠️ Clientes con Churn",
             f"{churn_customers:,}"
         )
-
 
     with col3:
 
@@ -568,14 +493,12 @@ if page == "🏠 Resumen ejecutivo":
             f"{no_churn_customers:,}"
         )
 
-
     with col4:
 
         st.metric(
             "📉 Tasa de abandono",
             f"{churn_rate:.2f}%"
         )
-
 
     show_description(
         "¿Qué significan estos indicadores?",
@@ -590,15 +513,9 @@ if page == "🏠 Resumen ejecutivo":
         """
     )
 
-
-    # ------------------------------------------------------
-    # DISTRIBUCIÓN
-    # ------------------------------------------------------
-
     st.subheader(
         "📊 Distribución de clientes"
     )
-
 
     churn_data = (
         df["Churn"]
@@ -606,12 +523,10 @@ if page == "🏠 Resumen ejecutivo":
         .reset_index()
     )
 
-
     churn_data.columns = [
         "Churn",
         "Clientes"
     ]
-
 
     churn_data["Estado"] = churn_data[
         "Churn"
@@ -622,7 +537,6 @@ if page == "🏠 Resumen ejecutivo":
         }
     )
 
-
     fig = px.pie(
         churn_data,
         names="Estado",
@@ -631,44 +545,34 @@ if page == "🏠 Resumen ejecutivo":
         title="Distribución general de Churn"
     )
 
-
     fig.update_layout(
         height=450,
         legend_title_text="Estado"
     )
-
 
     st.plotly_chart(
         fig,
         use_container_width=True
     )
 
-
     show_description(
         "¿Qué muestra esta gráfica?",
         """
-        Esta gráfica muestra la proporción de clientes que
-        permanecieron en el servicio frente a los clientes que
-        abandonaron.
+        Muestra la proporción de clientes que permanecieron en el
+        servicio frente a quienes abandonaron.
+
         <br><br>
-        <strong>Interpretación:</strong> permite observar rápidamente
-        la magnitud del problema de Churn y detectar que existe una
-        diferencia importante entre ambas clases.
+
+        Su objetivo es dimensionar visualmente el problema general
+        de abandono.
         """
     )
-
-
-    # ------------------------------------------------------
-    # RESUMEN EJECUTIVO
-    # ------------------------------------------------------
 
     st.subheader(
         "📌 Lectura ejecutiva"
     )
 
-
     col1, col2 = st.columns(2)
-
 
     with col1:
 
@@ -677,18 +581,17 @@ if page == "🏠 Resumen ejecutivo":
             <div class="danger-card">
             <h3>⚠️ Problema identificado</h3>
 
-            El proyecto identifica una tasa de abandono de
+            La tasa general de abandono es de
             <strong>{churn_rate:.2f}%</strong>.
 
-            Esto significa que aproximadamente
-            <strong>{churn_customers:,}</strong> clientes del
-            conjunto analizado presentan Churn.
+            Aproximadamente
+            <strong>{churn_customers:,}</strong> clientes presentan
+            Churn.
 
             </div>
             """,
             unsafe_allow_html=True
         )
-
 
     with col2:
 
@@ -697,40 +600,27 @@ if page == "🏠 Resumen ejecutivo":
             <div class="success-card">
             <h3>🎯 Objetivo del sistema</h3>
 
-            Utilizar los patrones históricos de los clientes para
-            identificar aquellos que presentan mayor probabilidad
-            de abandonar y apoyar estrategias de retención.
+            Identificar clientes con mayor probabilidad de abandono
+            para apoyar estrategias de retención preventiva.
 
             </div>
             """,
             unsafe_allow_html=True
         )
 
-
-# ==========================================================
-# PÁGINA 2
-# ANÁLISIS DE ABANDONO
-# ==========================================================
-
+# PÁGINA 2 — ANÁLISIS
 elif page == "🔎 Análisis de abandono":
 
     st.header(
         "🔎 Análisis de abandono"
     )
 
-
     st.write(
         """
-        En esta sección se analizan diferentes características de
-        los clientes para identificar patrones relacionados con
-        el abandono.
+        Esta sección analiza diferentes características de los
+        clientes para identificar patrones relacionados con Churn.
         """
     )
-
-
-    # ------------------------------------------------------
-    # FILTROS
-    # ------------------------------------------------------
 
     with st.expander(
         "🎛️ Filtros de análisis",
@@ -747,7 +637,6 @@ elif page == "🔎 Análisis de abandono":
             )
         )
 
-
         internet_filter = st.multiselect(
             "Servicio de Internet",
             sorted(
@@ -758,7 +647,6 @@ elif page == "🔎 Análisis de abandono":
             )
         )
 
-
     filtered_df = df[
         df["Contract"].isin(contract_filter)
         &
@@ -767,23 +655,18 @@ elif page == "🔎 Análisis de abandono":
         )
     ]
 
-
     st.info(
         f"Mostrando {len(filtered_df):,} clientes después de aplicar los filtros."
     )
 
-
-    # ------------------------------------------------------
-    # CONTRATO
-    # ------------------------------------------------------
-
+    # 1. CONTRATO
     st.subheader(
         "📄 Churn por tipo de contrato"
     )
 
-
     contract_churn = (
-        filtered_df.groupby(
+        filtered_df
+        .groupby(
             ["Contract", "Churn"]
         )
         .size()
@@ -791,7 +674,6 @@ elif page == "🔎 Análisis de abandono":
             name="Clientes"
         )
     )
-
 
     fig_contract = px.bar(
         contract_churn,
@@ -803,47 +685,42 @@ elif page == "🔎 Análisis de abandono":
         text_auto=True
     )
 
-
     fig_contract.update_layout(
         height=450
     )
-
 
     st.plotly_chart(
         fig_contract,
         use_container_width=True
     )
 
-
     show_description(
         "¿Qué muestra esta gráfica?",
         """
-        Compara la cantidad de clientes que permanecen y abandonan
-        según el tipo de contrato.
+        Compara clientes activos y clientes Churn según el tipo
+        de contrato.
+
         <br><br>
-        <strong>¿Para qué sirve?</strong>
-        Permite identificar qué modalidades contractuales concentran
-        mayor cantidad de abandonos.
+
+        Permite identificar modalidades contractuales donde
+        existe una concentración importante de abandonos.
+
         <br><br>
-        <strong>Decisión de negocio:</strong>
-        los segmentos con mayor abandono pueden ser candidatos para
-        campañas de fidelización, incentivos o migración hacia
-        contratos de mayor duración.
+
+        <strong>Decisión:</strong>
+        diseñar estrategias específicas para los segmentos
+        contractuales de mayor riesgo.
         """
     )
 
-
-    # ------------------------------------------------------
-    # INTERNET
-    # ------------------------------------------------------
-
+    # 2. INTERNET
     st.subheader(
         "🌐 Churn por servicio de Internet"
     )
 
-
     internet_churn = (
-        filtered_df.groupby(
+        filtered_df
+        .groupby(
             [
                 "InternetService",
                 "Churn"
@@ -855,7 +732,6 @@ elif page == "🔎 Análisis de abandono":
         )
     )
 
-
     fig_internet = px.bar(
         internet_churn,
         x="InternetService",
@@ -866,99 +742,33 @@ elif page == "🔎 Análisis de abandono":
         text_auto=True
     )
 
-
     fig_internet.update_layout(
         height=450
     )
-
 
     st.plotly_chart(
         fig_internet,
         use_container_width=True
     )
 
-
     show_description(
         "¿Qué muestra esta gráfica?",
         """
-        Permite comparar el comportamiento de abandono entre los
-        diferentes servicios de Internet.
+        Compara el comportamiento de abandono entre los diferentes
+        servicios de Internet.
+
         <br><br>
-        <strong>Interpretación:</strong>
-        si un servicio presenta una proporción elevada de Churn,
-        puede ser necesario investigar factores como precio,
-        calidad percibida, soporte técnico o satisfacción.
+
+        Una diferencia importante entre categorías puede indicar
+        segmentos que requieren una revisión adicional de precio,
+        calidad o soporte.
         """
     )
 
-
-    # ------------------------------------------------------
-    # MÉTODO DE PAGO
-    # ------------------------------------------------------
-
-    st.subheader(
-        "💳 Churn por método de pago"
-    )
-
-
-    payment_churn = (
-        filtered_df.groupby(
-            [
-                "PaymentMethod",
-                "Churn"
-            ]
-        )
-        .size()
-        .reset_index(
-            name="Clientes"
-        )
-    )
-
-
-    fig_payment = px.bar(
-        payment_churn,
-        x="PaymentMethod",
-        y="Clientes",
-        color="Churn",
-        barmode="group",
-        title="Clientes según método de pago",
-        text_auto=True
-    )
-
-
-    fig_payment.update_layout(
-        height=500,
-        xaxis_tickangle=-25
-    )
-
-
-    st.plotly_chart(
-        fig_payment,
-        use_container_width=True
-    )
-
-
-    show_description(
-        "¿Qué muestra esta gráfica?",
-        """
-        Compara el número de clientes que permanecen y abandonan
-        según su método de pago.
-        <br><br>
-        <strong>Valor para negocio:</strong>
-        puede ayudar a identificar segmentos que requieren
-        comunicación o incentivos específicos.
-        """
-    )
-
-
-    # ------------------------------------------------------
-    # ANTIGÜEDAD
-    # ------------------------------------------------------
-
+    # 3. ANTIGÜEDAD
     st.subheader(
         "⏳ Antigüedad de los clientes"
     )
-
 
     fig_tenure = px.histogram(
         filtered_df,
@@ -969,40 +779,33 @@ elif page == "🔎 Análisis de abandono":
         marginal="box"
     )
 
-
     fig_tenure.update_layout(
         height=500
     )
-
 
     st.plotly_chart(
         fig_tenure,
         use_container_width=True
     )
 
-
     show_description(
         "¿Qué muestra esta gráfica?",
         """
-        Analiza la distribución de clientes según el número de meses
-        que llevan utilizando el servicio.
+        Analiza cómo se distribuyen los clientes según los meses
+        de permanencia en el servicio.
+
         <br><br>
-        <strong>Interpretación:</strong>
-        permite observar si el abandono se concentra especialmente
-        entre clientes nuevos o si también existe un comportamiento
-        importante en clientes con mayor antigüedad.
+
+        Es útil para identificar si el abandono se concentra
+        especialmente durante las primeras etapas de la relación
+        con el cliente.
         """
     )
 
-
-    # ------------------------------------------------------
-    # CARGOS
-    # ------------------------------------------------------
-
+    # 4. CARGOS
     st.subheader(
         "💰 Cargos mensuales"
     )
-
 
     fig_charges = px.box(
         filtered_df,
@@ -1013,38 +816,29 @@ elif page == "🔎 Análisis de abandono":
         points="outliers"
     )
 
-
     fig_charges.update_layout(
         height=450
     )
-
 
     st.plotly_chart(
         fig_charges,
         use_container_width=True
     )
 
-
     show_description(
         "¿Qué muestra esta gráfica?",
         """
         Compara la distribución de los cargos mensuales entre
         clientes que permanecen y clientes que abandonan.
+
         <br><br>
-        <strong>¿Qué debemos observar?</strong>
-        La mediana, dispersión y posibles valores extremos.
-        <br><br>
-        Una diferencia importante puede indicar que el nivel de
-        facturación está relacionado con el comportamiento de
-        abandono.
+
+        La mediana, dispersión y valores extremos permiten evaluar
+        si existe una diferencia económica entre ambos grupos.
         """
     )
 
-
-    # ------------------------------------------------------
     # TABLA
-    # ------------------------------------------------------
-
     with st.expander(
         "📋 Ver datos filtrados"
     ):
@@ -1055,18 +849,12 @@ elif page == "🔎 Análisis de abandono":
             height=400
         )
 
-
-# ==========================================================
-# PÁGINA 3
-# PREDICCIÓN
-# ==========================================================
-
+# PÁGINA 3 — PREDICCIÓN
 elif page == "🔮 Predicción de Churn":
 
     st.header(
         "🔮 Predicción de abandono"
     )
-
 
     st.write(
         """
@@ -1075,25 +863,25 @@ elif page == "🔮 Predicción de Churn":
         """
     )
 
-
     show_description(
         "¿Cómo funciona esta sección?",
         """
         El sistema recibe las características del cliente y las
-        envía al modelo de Machine Learning.
+        envía al modelo cargado.
+
         <br><br>
+
         El modelo devuelve una probabilidad de abandono.
-        Si esta probabilidad es igual o superior al
+
+        <br><br>
+
+        Si la probabilidad es igual o superior al
         <strong>30%</strong>, el sistema clasifica al cliente como
         potencial Churn.
         """
     )
 
-
-    # ------------------------------------------------------
     # FORMULARIO
-    # ------------------------------------------------------
-
     with st.form(
         "churn_prediction_form"
     ):
@@ -1102,9 +890,7 @@ elif page == "🔮 Predicción de Churn":
             "👤 Información personal"
         )
 
-
         col1, col2, col3 = st.columns(3)
-
 
         with col1:
 
@@ -1116,14 +902,12 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
             senior_citizen = st.selectbox(
                 "Adulto mayor",
                 [0, 1],
                 format_func=lambda x:
                 "No" if x == 0 else "Sí"
             )
-
 
             partner = st.selectbox(
                 "¿Tiene pareja?",
@@ -1133,7 +917,6 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
             dependents = st.selectbox(
                 "¿Tiene dependientes?",
                 [
@@ -1141,7 +924,6 @@ elif page == "🔮 Predicción de Churn":
                     "No"
                 ]
             )
-
 
         with col2:
 
@@ -1153,7 +935,6 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
             multiple_lines = st.selectbox(
                 "Múltiples líneas",
                 [
@@ -1162,7 +943,6 @@ elif page == "🔮 Predicción de Churn":
                     "No phone service"
                 ]
             )
-
 
             internet_service = st.selectbox(
                 "Servicio de Internet",
@@ -1173,7 +953,6 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
             online_security = st.selectbox(
                 "Seguridad en línea",
                 [
@@ -1183,7 +962,6 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
             online_backup = st.selectbox(
                 "Respaldo en línea",
                 [
@@ -1192,7 +970,6 @@ elif page == "🔮 Predicción de Churn":
                     "No internet service"
                 ]
             )
-
 
         with col3:
 
@@ -1205,7 +982,6 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
             tech_support = st.selectbox(
                 "Soporte técnico",
                 [
@@ -1214,7 +990,6 @@ elif page == "🔮 Predicción de Churn":
                     "No internet service"
                 ]
             )
-
 
             streaming_tv = st.selectbox(
                 "Streaming TV",
@@ -1225,7 +1000,6 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
             streaming_movies = st.selectbox(
                 "Streaming Movies",
                 [
@@ -1235,21 +1009,13 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
         st.divider()
-
-
-        # --------------------------------------------------
-        # CONTRATO
-        # --------------------------------------------------
 
         st.subheader(
             "📄 Información contractual"
         )
 
-
         col4, col5, col6 = st.columns(3)
-
 
         with col4:
 
@@ -1262,7 +1028,6 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
         with col5:
 
             paperless_billing = st.selectbox(
@@ -1272,7 +1037,6 @@ elif page == "🔮 Predicción de Churn":
                     "No"
                 ]
             )
-
 
         with col6:
 
@@ -1286,21 +1050,13 @@ elif page == "🔮 Predicción de Churn":
                 ]
             )
 
-
         st.divider()
-
-
-        # --------------------------------------------------
-        # INFORMACIÓN ECONÓMICA
-        # --------------------------------------------------
 
         st.subheader(
             "💰 Información económica"
         )
 
-
         col7, col8, col9 = st.columns(3)
-
 
         with col7:
 
@@ -1310,7 +1066,6 @@ elif page == "🔮 Predicción de Churn":
                 max_value=72,
                 value=12
             )
-
 
         with col8:
 
@@ -1322,7 +1077,6 @@ elif page == "🔮 Predicción de Churn":
                 step=0.01
             )
 
-
         with col9:
 
             total_charges = st.number_input(
@@ -1332,20 +1086,14 @@ elif page == "🔮 Predicción de Churn":
                 step=0.01
             )
 
-
         st.divider()
-
 
         submitted = st.form_submit_button(
             "🔮 PREDECIR ABANDONO",
             use_container_width=True
         )
 
-
-    # ------------------------------------------------------
-    # REALIZAR PREDICCIÓN
-    # ------------------------------------------------------
-
+    # PREDICCIÓN
     if submitted:
 
         customer = pd.DataFrame(
@@ -1372,7 +1120,6 @@ elif page == "🔮 Predicción de Churn":
             }]
         )
 
-
         try:
 
             probability = model.predict_proba(
@@ -1389,31 +1136,21 @@ elif page == "🔮 Predicción de Churn":
 
             st.stop()
 
-
         prediction = (
             "Yes"
             if probability >= CHURN_THRESHOLD
             else "No"
         )
 
-
         percentage = probability * 100
 
-
-        # --------------------------------------------------
-        # RESULTADO
-        # --------------------------------------------------
-
         st.divider()
-
 
         st.subheader(
             "📊 Resultado de la evaluación"
         )
 
-
         col1, col2, col3 = st.columns(3)
-
 
         with col1:
 
@@ -1422,14 +1159,12 @@ elif page == "🔮 Predicción de Churn":
                 f"{percentage:.2f}%"
             )
 
-
         with col2:
 
             st.metric(
                 "Umbral utilizado",
                 f"{CHURN_THRESHOLD:.0%}"
             )
-
 
         with col3:
 
@@ -1447,15 +1182,9 @@ elif page == "🔮 Predicción de Churn":
                     "✅ NO CHURN"
                 )
 
-
-        # --------------------------------------------------
-        # PROBABILIDAD
-        # --------------------------------------------------
-
         st.subheader(
             "📈 Probabilidad estimada"
         )
-
 
         st.progress(
             min(
@@ -1464,20 +1193,13 @@ elif page == "🔮 Predicción de Churn":
             )
         )
 
-
         st.caption(
             f"Probabilidad calculada: {percentage:.2f}%"
         )
 
-
-        # --------------------------------------------------
-        # RIESGO
-        # --------------------------------------------------
-
         risk, risk_type, message = risk_information(
             probability
         )
-
 
         if risk_type == "danger":
 
@@ -1495,7 +1217,6 @@ Implementar una estrategia prioritaria de retención.
 """
             )
 
-
         elif risk_type == "warning":
 
             st.warning(
@@ -1511,7 +1232,6 @@ Implementar una estrategia prioritaria de retención.
 Realizar seguimiento y ofrecer incentivos de retención.
 """
             )
-
 
         else:
 
@@ -1529,13 +1249,7 @@ Mantener el seguimiento habitual.
 """
             )
 
-
-        # --------------------------------------------------
-        # PREDICCIÓN FINAL
-        # --------------------------------------------------
-
         st.divider()
-
 
         if prediction == "Yes":
 
@@ -1549,44 +1263,32 @@ Mantener el seguimiento habitual.
                 "✅ Predicción final: CLIENTE SIN CHURN"
             )
 
-
-# ==========================================================
-# PÁGINA 4
-# MODELO PREDICTIVO
-# ==========================================================
-
+# PÁGINA 4 — MODELO
 elif page == "🤖 Modelo predictivo":
 
     st.header(
         "🤖 Modelo predictivo"
     )
 
-
     st.write(
-        """
-        Esta sección explica cómo funciona el modelo de Machine
-        Learning utilizado para realizar las predicciones.
-        """
+        f"""
+        Esta sección explica el modelo que actualmente se encuentra
+        cargado en <strong>churn_model.pkl</strong>.
+        """,
+        unsafe_allow_html=True
     )
-
-
-    # ------------------------------------------------------
-    # MODELO
-    # ------------------------------------------------------
 
     st.subheader(
-        "🌲 Algoritmo utilizado"
+        "🧠 Algoritmo utilizado"
     )
-
 
     st.markdown(
         f"""
         <div class="model-card">
 
-        <h2>🌲 {model_name}</h2>
+        <h2>🤖 {model_name}</h2>
 
-        El proyecto utiliza un algoritmo de aprendizaje supervisado
-        para clasificar clientes en dos categorías:
+        El modelo clasifica a los clientes en dos categorías:
 
         <br><br>
 
@@ -1601,45 +1303,79 @@ elif page == "🤖 Modelo predictivo":
         unsafe_allow_html=True
     )
 
+    # EXPLICACIÓN DINÁMICA
+    if model_name == "Regresión Logística":
 
-    # ------------------------------------------------------
-    # EXPLICACIÓN
-    # ------------------------------------------------------
+        st.subheader(
+            "📚 ¿Cómo funciona la Regresión Logística?"
+        )
 
-    st.subheader(
-        "📚 ¿Cómo funciona Random Forest?"
-    )
+        st.write(
+            """
+            La Regresión Logística es un algoritmo de aprendizaje
+            supervisado utilizado para problemas de clasificación.
 
+            En este proyecto estima la probabilidad de que un cliente
+            pertenezca a la clase Churn.
 
-    st.markdown(
-        """
-        **Random Forest** es un algoritmo de aprendizaje supervisado
-        basado en múltiples árboles de decisión.
+            Posteriormente, esa probabilidad se compara con el umbral
+            del 30% para determinar la clasificación final.
+            """
+        )
 
-        En lugar de depender de un solo árbol, el algoritmo combina
-        las predicciones de varios árboles para obtener una decisión
-        más robusta.
+    elif model_name == "Random Forest":
 
-        En este proyecto, cada árbol analiza diferentes combinaciones
-        de las características de los clientes.
+        st.subheader(
+            "📚 ¿Cómo funciona Random Forest?"
+        )
 
-        Finalmente, el conjunto de árboles participa en la decisión
-        de clasificación del cliente.
-        """
-    )
+        st.write(
+            """
+            Random Forest es un algoritmo de aprendizaje supervisado
+            basado en múltiples árboles de decisión.
 
+            Cada árbol analiza diferentes combinaciones de las
+            características de los clientes y el conjunto de árboles
+            participa en la decisión final.
+            """
+        )
 
-    # ------------------------------------------------------
-    # PIPELINE
-    # ------------------------------------------------------
+    elif model_name == "Árbol de Decisión":
 
+        st.subheader(
+            "📚 ¿Cómo funciona el Árbol de Decisión?"
+        )
+
+        st.write(
+            """
+            El Árbol de Decisión clasifica clientes mediante una
+            secuencia de decisiones basadas en las características
+            de cada registro.
+
+            Cada división del árbol busca separar de la mejor manera
+            posible las clases No Churn y Churn.
+            """
+        )
+
+    else:
+
+        st.subheader(
+            "📚 ¿Cómo funciona el modelo?"
+        )
+
+        st.write(
+            """
+            El modelo utiliza las características históricas de los
+            clientes para determinar la probabilidad de abandono.
+            """
+        )
+
+    # FLUJO
     st.subheader(
         "⚙️ Flujo del modelo"
     )
 
-
     col1, col2, col3, col4 = st.columns(4)
-
 
     with col1:
 
@@ -1649,13 +1385,12 @@ elif page == "🤖 Modelo predictivo":
 
             ### 1️⃣ Datos
 
-            Dataset limpio con información histórica de clientes.
+            Dataset limpio con información histórica.
 
             </div>
             """,
             unsafe_allow_html=True
         )
-
 
     with col2:
 
@@ -1665,14 +1400,13 @@ elif page == "🤖 Modelo predictivo":
 
             ### 2️⃣ Preprocesamiento
 
-            Variables numéricas y categóricas son transformadas
-            antes del entrenamiento.
+            Las variables numéricas y categóricas son preparadas
+            para el modelo.
 
             </div>
             """,
             unsafe_allow_html=True
         )
-
 
     with col3:
 
@@ -1682,13 +1416,12 @@ elif page == "🤖 Modelo predictivo":
 
             ### 3️⃣ Entrenamiento
 
-            El modelo aprende patrones relacionados con Churn.
+            El algoritmo aprende patrones relacionados con Churn.
 
             </div>
             """,
             unsafe_allow_html=True
         )
-
 
     with col4:
 
@@ -1698,18 +1431,14 @@ elif page == "🤖 Modelo predictivo":
 
             ### 4️⃣ Predicción
 
-            Se calcula la probabilidad de abandono de un cliente.
+            Se obtiene una probabilidad de abandono.
 
             </div>
             """,
             unsafe_allow_html=True
         )
 
-
-    # ------------------------------------------------------
     # VARIABLES
-    # ------------------------------------------------------
-
     st.subheader(
         "🧩 Variables utilizadas"
     )
@@ -1724,14 +1453,11 @@ elif page == "🤖 Modelo predictivo":
         ]
     ]
 
-
     st.write(
         f"El modelo utiliza **{len(predictors)} variables predictoras**:"
     )
 
-
     cols = st.columns(3)
-
 
     for index, variable in enumerate(
         predictors
@@ -1743,170 +1469,154 @@ elif page == "🤖 Modelo predictivo":
                 f"- `{variable}`"
             )
 
-
-    # ------------------------------------------------------
-    # ENTRENAMIENTO
-    # ------------------------------------------------------
-
+    # DIVISIÓN
     st.subheader(
         "🧪 División de los datos"
     )
 
+    col1, col2 = st.columns(2)
 
-    st.markdown(
-        """
-        Para evaluar el modelo de manera adecuada, los datos se
-        dividen en dos conjuntos:
+    with col1:
 
-        **80% — entrenamiento**
+        st.markdown(
+            """
+            <div class="model-card">
 
-        Se utiliza para que el algoritmo aprenda los patrones.
+            ### 80% — Entrenamiento
 
-        **20% — prueba**
+            Utilizado para que el modelo aprenda los patrones
+            presentes en los datos históricos.
 
-        Se utiliza para comprobar qué tan bien funciona el modelo
-        con datos que no utilizó durante el entrenamiento.
-        """
-    )
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
+    with col2:
 
-    # ------------------------------------------------------
+        st.markdown(
+            """
+            <div class="model-card">
+
+            ### 20% — Prueba
+
+            Utilizado para comprobar el comportamiento del modelo
+            con datos que no utilizó durante el entrenamiento.
+
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     # UMBRAL
-    # ------------------------------------------------------
-
     st.subheader(
         "🎯 Umbral de decisión"
     )
-
 
     st.metric(
         "Umbral utilizado",
         f"{CHURN_THRESHOLD:.0%}"
     )
 
-
-    st.markdown(
+    st.write(
         f"""
-        El modelo produce una probabilidad entre 0% y 100%.
+        El modelo genera una probabilidad de abandono entre 0% y
+        100%.
 
-        En este proyecto se utiliza un umbral de
-        **{CHURN_THRESHOLD:.0%}**.
+        Cuando la probabilidad es igual o superior al
+        **{CHURN_THRESHOLD:.0%}**, el sistema clasifica al cliente
+        como potencial Churn.
 
-        Por ejemplo:
-
-        - Si la probabilidad es **20%** → No Churn.
-        - Si la probabilidad es **30%** → Churn.
-        - Si la probabilidad es **70%** → Churn.
-
-        El objetivo de utilizar un umbral relativamente bajo es
-        detectar una mayor cantidad de clientes potencialmente
-        propensos al abandono.
+        Esto permite priorizar la detección de posibles abandonos.
         """
     )
 
-
-# ==========================================================
-# PÁGINA 5
-# RENDIMIENTO
-# ==========================================================
-
+# PÁGINA 5 — RENDIMIENTO
 elif page == "📈 Rendimiento":
 
     st.header(
         "📈 Rendimiento del modelo"
     )
 
-
     st.write(
-        """
-        Esta sección presenta las métricas utilizadas para evaluar
-        el desempeño del modelo de clasificación.
-        """
+        f"""
+        Esta sección presenta el desempeño real de
+        <strong>{model_name}</strong> utilizando el conjunto de prueba
+        y el umbral de <strong>{CHURN_THRESHOLD:.0%}</strong>.
+        """,
+        unsafe_allow_html=True
     )
 
-
-    # ------------------------------------------------------
     # MÉTRICAS
-    # ------------------------------------------------------
-
     st.subheader(
         "📊 Métricas de evaluación"
     )
 
-
-    # Resultados obtenidos anteriormente para Random Forest
-    accuracy = 0.8070
-    precision = 0.6821
-    recall = 0.5107
-    f1 = 0.5841
-
-
     col1, col2, col3, col4 = st.columns(4)
-
 
     with col1:
 
         st.metric(
             "Accuracy",
-            f"{accuracy:.2%}"
+            f"{final_accuracy:.2%}"
         )
-
 
     with col2:
 
         st.metric(
             "Precision",
-            f"{precision:.2%}"
+            f"{final_precision:.2%}"
         )
-
 
     with col3:
 
         st.metric(
             "Recall",
-            f"{recall:.2%}"
+            f"{final_recall:.2%}"
         )
-
 
     with col4:
 
         st.metric(
             "F1-Score",
-            f"{f1:.2%}"
+            f"{final_f1:.2%}"
         )
-
 
     show_description(
         "¿Cómo interpretamos estas métricas?",
         f"""
-        <strong>Accuracy ({accuracy:.2%})</strong>:
+        <strong>Accuracy ({final_accuracy:.2%})</strong>:
         proporción total de predicciones correctas.
+
         <br><br>
 
-        <strong>Precision ({precision:.2%})</strong>:
-        de los clientes clasificados como Churn, indica qué proporción
+        <strong>Precision ({final_precision:.2%})</strong>:
+        de los clientes clasificados como Churn, qué proporción
         realmente abandonó.
+
         <br><br>
 
-        <strong>Recall ({recall:.2%})</strong>:
-        indica qué proporción de los clientes que realmente abandonaron
+        <strong>Recall ({final_recall:.2%})</strong>:
+        proporción de los clientes que realmente abandonaron que
         logró detectar el modelo.
+
         <br><br>
 
-        <strong>F1-Score ({f1:.2%})</strong>:
-        representa el equilibrio entre Precision y Recall.
+        <strong>F1-Score ({final_f1:.2%})</strong>:
+        equilibrio entre Precision y Recall.
+
+        <br><br>
+
+        Para un problema de retención, Recall es especialmente
+        relevante porque representa la capacidad de detectar
+        clientes que realmente abandonarán.
         """
     )
 
-
-    # ------------------------------------------------------
-    # COMPARACIÓN
-    # ------------------------------------------------------
-
+    # COMPARACIÓN DE MODELOS
     st.subheader(
         "🏆 Comparación de modelos"
     )
-
 
     comparison = pd.DataFrame(
         {
@@ -1942,7 +1652,6 @@ elif page == "📈 Rendimiento":
         }
     )
 
-
     metric_to_show = st.selectbox(
         "Métrica a comparar",
         [
@@ -1953,56 +1662,49 @@ elif page == "📈 Rendimiento":
         ]
     )
 
-
     fig_comparison = px.bar(
         comparison,
         x="Modelo",
         y=metric_to_show,
         text_auto=".2%",
-        title=f"Comparación de modelos — {metric_to_show}"
+        title=f"Comparación inicial de modelos — {metric_to_show}"
     )
-
 
     fig_comparison.update_layout(
         yaxis_tickformat=".0%",
         height=450
     )
 
-
     st.plotly_chart(
         fig_comparison,
         use_container_width=True
     )
 
-
     show_description(
         "¿Qué muestra esta gráfica?",
         """
-        Permite comparar el desempeño de tres algoritmos supervisados
-        probados durante el proyecto.
+        Compara los tres algoritmos que fueron probados durante
+        el proyecto.
+
         <br><br>
-        La selección del modelo no debe basarse únicamente en Accuracy.
-        Para un problema de Churn también es importante analizar Recall,
-        ya que representa la capacidad de detectar clientes que realmente
-        abandonarán.
+
+        Esta comparación corresponde a las evaluaciones iniciales
+        realizadas con el umbral estándar.
+
+        <br><br>
+
+        Después de esta comparación se realizó la optimización
+        del umbral para mejorar la detección de clientes Churn.
         """
     )
 
-
-    # ------------------------------------------------------
     # MATRIZ DE CONFUSIÓN
-    # ------------------------------------------------------
-
     st.subheader(
         "🧮 Matriz de confusión"
     )
 
-
-    confusion = pd.DataFrame(
-        [
-            [946, 89],
-            [183, 191]
-        ],
+    confusion_df = pd.DataFrame(
+        final_confusion,
         index=[
             "Real: No Churn",
             "Real: Churn"
@@ -2013,57 +1715,59 @@ elif page == "📈 Rendimiento":
         ]
     )
 
-
     fig_matrix = px.imshow(
-        confusion,
+        confusion_df,
         text_auto=True,
         aspect="auto",
-        title="Matriz de confusión — Random Forest"
+        title=f"Matriz de confusión — {model_name}"
     )
-
 
     fig_matrix.update_layout(
         height=450
     )
-
 
     st.plotly_chart(
         fig_matrix,
         use_container_width=True
     )
 
+    tn = final_confusion[0][0]
+    fp = final_confusion[0][1]
+    fn = final_confusion[1][0]
+    tp = final_confusion[1][1]
 
     show_description(
         "¿Cómo se interpreta?",
-        """
-        La matriz de confusión permite observar qué tan bien clasifica
-        el modelo cada categoría.
+        f"""
+        <strong>Verdaderos negativos:</strong> {tn} clientes
+        fueron correctamente clasificados como No Churn.
+
         <br><br>
 
-        <strong>946</strong> clientes fueron correctamente clasificados
-        como No Churn.
-        <br>
+        <strong>Falsos positivos:</strong> {fp} clientes fueron
+        clasificados como Churn aunque no abandonaron.
 
-        <strong>191</strong> clientes fueron correctamente clasificados
-        como Churn.
         <br><br>
 
-        También existen falsos positivos y falsos negativos.
-        Para un sistema de retención, los falsos negativos son
-        especialmente importantes porque representan clientes que
-        abandonaron pero que el modelo no logró detectar.
+        <strong>Falsos negativos:</strong> {fn} clientes realmente
+        abandonaron pero el modelo no los detectó.
+
+        <br><br>
+
+        <strong>Verdaderos positivos:</strong> {tp} clientes fueron
+        correctamente clasificados como Churn.
+
+        <br><br>
+
+        Para una estrategia de retención, los falsos negativos son
+        especialmente importantes.
         """
     )
 
-
-    # ------------------------------------------------------
-    # UMBRAL
-    # ------------------------------------------------------
-
+    # OPTIMIZACIÓN DEL UMBRAL
     st.subheader(
         "🎯 Optimización del umbral"
     )
-
 
     threshold_data = pd.DataFrame(
         {
@@ -2119,7 +1823,6 @@ elif page == "📈 Rendimiento":
         }
     )
 
-
     threshold_metric = st.selectbox(
         "Métrica",
         [
@@ -2131,7 +1834,6 @@ elif page == "📈 Rendimiento":
         key="threshold_metric"
     )
 
-
     fig_threshold = px.line(
         threshold_data,
         x="Umbral",
@@ -2140,67 +1842,60 @@ elif page == "📈 Rendimiento":
         title=f"Comportamiento de {threshold_metric} según el umbral"
     )
 
-
     fig_threshold.update_layout(
         yaxis_tickformat=".0%",
         xaxis_tickformat=".0%",
         height=450
     )
 
+    fig_threshold.add_vline(
+        x=0.30,
+        line_dash="dash",
+        annotation_text="Umbral 30%"
+    )
 
     st.plotly_chart(
         fig_threshold,
         use_container_width=True
     )
 
-
     show_description(
-        "¿Por qué es importante el umbral?",
+        "¿Por qué se utiliza 30%?",
         """
         El umbral determina a partir de qué probabilidad el sistema
-        considera que un cliente presenta Churn.
+        clasifica a un cliente como potencial Churn.
+
         <br><br>
 
-        Un umbral menor permite detectar más posibles abandonos,
-        aumentando el Recall, pero también genera más falsos positivos.
+        Un umbral menor aumenta la capacidad de detectar posibles
+        abandonos, aunque también puede generar más falsos positivos.
+
         <br><br>
 
-        En este proyecto se seleccionó un umbral del
-        <strong>30%</strong> como estrategia orientada a detectar una
-        mayor cantidad de clientes potencialmente en riesgo.
+        En el proceso de optimización realizado anteriormente,
+        el umbral del <strong>30%</strong> obtuvo el mejor
+        F1-Score entre los valores evaluados.
         """
     )
 
-
-# ==========================================================
-# PÁGINA 6
-# DECISIONES
-# ==========================================================
-
+# PÁGINA 6 — DECISIONES
 elif page == "💡 Decisiones":
 
     st.header(
         "💡 Insights y toma de decisiones"
     )
 
-
     st.write(
         """
-        El objetivo final del análisis no es solamente generar
-        gráficas, sino convertir los resultados obtenidos en
-        acciones que puedan apoyar la toma de decisiones.
+        El objetivo final del análisis es transformar los resultados
+        en acciones útiles para la toma de decisiones.
         """
     )
 
-
-    # ------------------------------------------------------
     # HALLAZGO 1
-    # ------------------------------------------------------
-
     st.subheader(
         "1️⃣ El abandono es un problema relevante"
     )
-
 
     st.markdown(
         f"""
@@ -2212,15 +1907,10 @@ elif page == "💡 Decisiones":
         """
     )
 
-
-    # ------------------------------------------------------
     # HALLAZGO 2
-    # ------------------------------------------------------
-
     st.subheader(
-        "2️⃣ El contrato es una variable importante"
+        "2️⃣ El tipo de contrato permite segmentar el riesgo"
     )
-
 
     contract_rates = (
         df.groupby("Contract")["Churn"]
@@ -2233,57 +1923,61 @@ elif page == "💡 Decisiones":
         )
     )
 
+    contract_table = (
+        contract_rates
+        .reset_index()
+    )
 
-    for contract, rate in contract_rates.items():
+    contract_table.columns = [
+        "Tipo de contrato",
+        "Tasa de abandono (%)"
+    ]
 
-        st.write(
-            f"**{contract}:** {rate:.2f}% de abandono"
-        )
+    contract_table[
+        "Tasa de abandono (%)"
+    ] = contract_table[
+        "Tasa de abandono (%)"
+    ].round(2)
 
+    st.dataframe(
+        contract_table,
+        use_container_width=True,
+        hide_index=True
+    )
 
     show_description(
         "Decisión recomendada",
         """
-        Analizar estrategias específicas para los clientes que
-        presentan mayor propensión al abandono según su modalidad
-        contractual.
-        <br><br>
-        Algunas estrategias pueden incluir incentivos, descuentos,
-        beneficios por permanencia o migración hacia contratos de
-        mayor duración.
+        Los segmentos contractuales con mayores tasas de abandono
+        pueden ser candidatos para estrategias de fidelización,
+        incentivos, descuentos o beneficios por permanencia.
         """
     )
 
-
-    # ------------------------------------------------------
     # HALLAZGO 3
-    # ------------------------------------------------------
-
     st.subheader(
         "3️⃣ Utilizar el modelo para priorizar clientes"
     )
 
-
     st.markdown(
-        """
-        El modelo permite pasar de un análisis descriptivo a un
-        enfoque predictivo.
+        f"""
+        El modelo <strong>{model_name}</strong> permite pasar de
+        un análisis descriptivo a un enfoque predictivo.
 
-        En lugar de esperar a que el cliente abandone, la empresa
-        puede identificar clientes con mayor probabilidad de Churn
+        <br><br>
+
+        En lugar de esperar a que el cliente abandone, se puede
+        identificar a los clientes cuya probabilidad de abandono
+        supera el umbral del <strong>{CHURN_THRESHOLD:.0%}</strong>
         y priorizar acciones preventivas.
-        """
+        """,
+        unsafe_allow_html=True
     )
 
-
-    # ------------------------------------------------------
     # MATRIZ DE ACCIONES
-    # ------------------------------------------------------
-
     st.subheader(
         "🎯 Matriz de acciones recomendadas"
     )
-
 
     actions = pd.DataFrame(
         {
@@ -2310,47 +2004,40 @@ elif page == "💡 Decisiones":
         }
     )
 
-
     st.dataframe(
         actions,
         use_container_width=True,
         hide_index=True
     )
 
-
-    # ------------------------------------------------------
     # CONCLUSIÓN
-    # ------------------------------------------------------
-
     st.subheader(
         "🏁 Conclusión"
     )
 
-
-    st.markdown(
+    st.write(
         """
-        El sistema integra un proceso completo de extracción,
-        transformación, análisis, modelado y visualización.
+        El sistema integra extracción, transformación, análisis,
+        modelado supervisado y visualización interactiva.
 
         La información histórica permite identificar patrones
-        asociados con el abandono y el modelo supervisado permite
-        estimar el riesgo individual de cada cliente.
+        relacionados con el abandono y el modelo permite estimar
+        el riesgo individual de cada cliente.
 
-        De esta manera, el proyecto transforma los datos en
-        información útil para apoyar estrategias de retención y
-        toma de decisiones.
+        De esta manera, los datos pueden utilizarse para apoyar
+        estrategias de retención y toma de decisiones preventivas.
         """
     )
-
 
     st.markdown(
         """
         <div class="success-card">
+
         <h3>🎯 Objetivo final</h3>
 
         Detectar clientes potencialmente propensos al abandono
-        <strong>antes de que abandonen</strong>, permitiendo que
-        la empresa pueda actuar de manera preventiva.
+        <strong>antes de que abandonen</strong>, permitiendo
+        actuar de manera preventiva.
 
         </div>
         """,
